@@ -180,15 +180,56 @@ class StayLitHomePage extends StatefulWidget {
 
 class _StayLitHomePageState extends State<StayLitHomePage> {
   bool _isWakelockEnabled = true;
+  Timer? _wakelockRefreshTimer;
+  final int _wakelockRefreshInterval = 30; // Check wakelock every 30 seconds
 
   @override
   void initState() {
     super.initState();
     _checkWakelockStatus();
+    // Start the periodic wakelock check
+    _startWakelockRefreshTimer();
+  }
+
+  void _startWakelockRefreshTimer() {
+    // Cancel any existing timer
+    _wakelockRefreshTimer?.cancel();
+
+    // Create a new timer that periodically checks and refreshes the wakelock
+    _wakelockRefreshTimer = Timer.periodic(
+      Duration(seconds: _wakelockRefreshInterval),
+      (_) => _refreshWakelockIfEnabled()
+    );
+  }
+
+  Future<void> _refreshWakelockIfEnabled() async {
+    // Check current wakelock status
+    final isCurrentlyEnabled = await WakelockPlus.enabled;
+
+    // If wakelock should be enabled but isn't, re-enable it
+    if (_isWakelockEnabled && !isCurrentlyEnabled) {
+      debugPrint('Wakelock was released externally. Re-enabling...');
+      await WakelockPlus.enable();
+    }
+    // If wakelock should be disabled but is enabled, disable it
+    else if (!_isWakelockEnabled && isCurrentlyEnabled) {
+      debugPrint('Wakelock was enabled externally. Disabling...');
+      await WakelockPlus.disable();
+    }
+
+    // Update UI if needed
+    final newStatus = await WakelockPlus.enabled;
+    if (newStatus != _isWakelockEnabled) {
+      setState(() {
+        _isWakelockEnabled = newStatus;
+      });
+    }
   }
 
   @override
   void dispose() {
+    // Cancel the refresh timer
+    _wakelockRefreshTimer?.cancel();
     // Disable wakelock when app is closed
     WakelockPlus.disable();
     super.dispose();
@@ -284,7 +325,7 @@ class _StayLitHomePageState extends State<StayLitHomePage> {
                   decoration: BoxDecoration(
                     color: isDarkMode
                         ? Colors.grey.shade800
-                        : Colors.grey.withOpacity(0.1),
+                        : Colors.grey.withValues(red: 128, green: 128, blue: 128, alpha: 26),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: StatusRow(
@@ -369,7 +410,7 @@ class SettingsPage extends StatelessWidget {
               decoration: BoxDecoration(
                 color: isDarkMode
                     ? Colors.grey.shade800
-                    : Colors.grey.withOpacity(0.1),
+                    : Colors.grey.withValues(red: 128, green: 128, blue: 128, alpha: 26),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
@@ -420,7 +461,7 @@ class SettingsPage extends StatelessWidget {
               decoration: BoxDecoration(
                 color: isDarkMode
                     ? Colors.grey.shade800
-                    : Colors.grey.withOpacity(0.1),
+                    : Colors.grey.withValues(red: 128, green: 128, blue: 128, alpha: 26),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
@@ -470,7 +511,7 @@ class SettingsPage extends StatelessWidget {
               decoration: BoxDecoration(
                 color: isDarkMode
                     ? Colors.grey.shade800
-                    : Colors.grey.withOpacity(0.1),
+                    : Colors.grey.withValues(red: 128, green: 128, blue: 128, alpha: 26),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Column(
