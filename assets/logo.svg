@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background Circle -->
+  <circle cx="256" cy="256" r="240" fill="#2196F3" />
+
+  <!-- Inner Circle (Light Glow) -->
+  <circle cx="256" cy="256" r="200" fill="#64B5F6" />
+  <circle cx="256" cy="256" r="160" fill="#90CAF9" />
+
+  <!-- Lightbulb Icon -->
+  <path d="M256 80C192.1 80 140 132.1 140 196C140 230.6 154.7 262.1 180 282.9V316C180 327 189 336 200 336H312C323 336 332 327 332 316V282.9C357.3 262.1 372 230.6 372 196C372 132.1 319.9 80 256 80Z" fill="#FFEB3B" stroke="#FBC02D" stroke-width="8"/>
+
+  <!-- Lightbulb Base -->
+  <rect x="220" y="336" width="72" height="24" rx="4" fill="#FFD54F" stroke="#FBC02D" stroke-width="4"/>
+  <rect x="220" y="360" width="72" height="24" rx="4" fill="#FFD54F" stroke="#FBC02D" stroke-width="4"/>
+
+  <!-- Light Rays -->
+  <path d="M256 40V16" stroke="#FFEB3B" stroke-width="12" stroke-linecap="round"/>
+  <path d="M350 80L368 56" stroke="#FFEB3B" stroke-width="12" stroke-linecap="round"/>
+  <path d="M162 80L144 56" stroke="#FFEB3B" stroke-width="12" stroke-linecap="round"/>
+  <path d="M400 196L424 196" stroke="#FFEB3B" stroke-width="12" stroke-linecap="round"/>
+  <path d="M112 196L88 196" stroke="#FFEB3B" stroke-width="12" stroke-linecap="round"/>
+
+  <!-- Wake Lines (Representing keeping device awake) -->
+  <path d="M180 440C200 420 312 420 332 440" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round"/>
+  <path d="M160 470C220 450 292 450 352 470" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round"/>
+</svg>
