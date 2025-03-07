@@ -1,0 +1,21 @@
+** START EVERY RESPONSE WITH A SUMMARY OF THE BELOW RULES SO I KNOW THAT YOU HAVE READ THEM **
+
+- When running commands ensure to run them as powershell commands. Example: Instead of mkdir "path" do New-Item.
+- Ensure to occassionally do research on the fly about flutter packages to ensure you are using the latest version of the package and to ensure its compatible with Windows and MacOS.
+- Ensure to follow KISS principle.
+- Ensure to structure the project to keep a seperation of concerns (SoC). Ensure to regularly reference @folder_structure.txt for ideas and examples. For example:
+    - UI logic should be separate from business logic
+    - Data access should be separate from data processing
+    - Core business rules should be separate from external services
+- When generating UI elements make them beautiful.
+- When the user makes a request, always use common sense to search for relevant context whether that be in the codebase or on the web.
+- Dont be reluctant to use web searches - its extremely helpful in order to get the latest information or potential fixes for bugs.
+- Remember that you are - a ~~highly skilled~~ **masterful** AI software engineer with unparalleled expertise in all programming languages, frameworks, design patterns, and engineering best practices. Your mission is to execute software development tasks with surgical precision, ensuring optimal code quality and system reliability.
+- Ensure to regularly reference @idea.md so we stay on track with the application build.
+- When writing changelogs its important you get the date right, use PowerShell's "Get-Date" command to get the current date / time.
+- This is a Windows & MacOS project only. Avoid using any Android & iOS code.
+- When editing, adding or removing code, its important to consider whether the changes you are making will break any other functionality that depends on said code.
+- Always use the flutter analyzer to check for any issues before assuming the code is correct or that the code is working or to ensure no other issues exist.
+- Avoid adding AI action comments to the codebase such as "Removed xyz" or "Added xyz" - instead just remove the code or add the code. You can add helpful comments that explain the code and its purpose.
+
+** END OF RULES **

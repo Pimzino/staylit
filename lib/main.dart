@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:wakelock_plus/wakelock_plus.dart';
+import 'sleep_prevention.dart';
+import 'window_manager_utils.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:window_manager/window_manager.dart';
@@ -9,6 +10,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 // Keys for shared preferences
 const String keyEnableOnStartup = 'enable_on_startup';
 const String keyThemeMode = 'theme_mode';
+const String keyAlwaysOnTop = 'always_on_top';
 
 void main() async {
   // Ensure widgets binding is initialized
@@ -17,10 +19,21 @@ void main() async {
   // Load preferences
   final prefs = await SharedPreferences.getInstance();
   final enableOnStartup = prefs.getBool(keyEnableOnStartup) ?? true;
+  final alwaysOnTop = prefs.getBool(keyAlwaysOnTop) ?? true;
 
-  // Enable wakelock based on preference
+  // Enable sleep prevention based on preference
   if (enableOnStartup) {
-    WakelockPlus.enable();
+    await SleepPrevention().enable();
+  }
+
+  // Initialize WindowManagerUtils
+  await WindowManagerUtils().initialize();
+
+  // Apply always-on-top setting if needed
+  if (alwaysOnTop) {
+    await WindowManagerUtils().enableAlwaysOnTop();
+  } else {
+    await WindowManagerUtils().disableAlwaysOnTop();
   }
 
   // Set up window size for desktop platforms
@@ -36,7 +49,7 @@ void main() async {
       skipTaskbar: false,
       titleBarStyle: TitleBarStyle.normal,
       title: 'StayLit',
-      alwaysOnTop: false,
+      alwaysOnTop: false, // This will be controlled by our WindowManagerUtils
     );
 
     await windowManager.waitUntilReadyToShow(windowOptions, () async {
@@ -96,6 +109,7 @@ class ThemeProvider extends ChangeNotifier {
 class SettingsProvider extends ChangeNotifier {
   late SharedPreferences _prefs;
   bool _enableOnStartup = true;
+  bool _alwaysOnTop = true; // Default to true
   bool _initialized = false;
 
   SettingsProvider() {
@@ -105,17 +119,32 @@ class SettingsProvider extends ChangeNotifier {
   Future<void> _loadPreferences() async {
     _prefs = await SharedPreferences.getInstance();
     _enableOnStartup = _prefs.getBool(keyEnableOnStartup) ?? true;
+    _alwaysOnTop = _prefs.getBool(keyAlwaysOnTop) ?? true; // Default to true
     _initialized = true;
     notifyListeners();
   }
 
   bool get enableOnStartup => _enableOnStartup;
-
+  bool get alwaysOnTop => _alwaysOnTop;
   bool get isInitialized => _initialized;
 
   Future<void> setEnableOnStartup(bool value) async {
     _enableOnStartup = value;
     await _prefs.setBool(keyEnableOnStartup, value);
+    notifyListeners();
+  }
+
+  Future<void> setAlwaysOnTop(bool value) async {
+    _alwaysOnTop = value;
+    await _prefs.setBool(keyAlwaysOnTop, value);
+
+    // Apply the setting immediately
+    if (value) {
+      await WindowManagerUtils().enableAlwaysOnTop();
+    } else {
+      await WindowManagerUtils().disableAlwaysOnTop();
+    }
+
     notifyListeners();
   }
 }
@@ -204,21 +233,21 @@ class _StayLitHomePageState extends State<StayLitHomePage> {
 
   Future<void> _refreshWakelockIfEnabled() async {
     // Check current wakelock status
-    final isCurrentlyEnabled = await WakelockPlus.enabled;
+    final isCurrentlyEnabled = SleepPrevention().isEnabled;
 
     // If wakelock should be enabled but isn't, re-enable it
     if (_isWakelockEnabled && !isCurrentlyEnabled) {
-      debugPrint('Wakelock was released externally. Re-enabling...');
-      await WakelockPlus.enable();
+      debugPrint('Sleep prevention was released externally. Re-enabling...');
+      await SleepPrevention().enable();
     }
     // If wakelock should be disabled but is enabled, disable it
     else if (!_isWakelockEnabled && isCurrentlyEnabled) {
-      debugPrint('Wakelock was enabled externally. Disabling...');
-      await WakelockPlus.disable();
+      debugPrint('Sleep prevention was enabled externally. Disabling...');
+      await SleepPrevention().disable();
     }
 
     // Update UI if needed
-    final newStatus = await WakelockPlus.enabled;
+    final newStatus = SleepPrevention().isEnabled;
     if (newStatus != _isWakelockEnabled) {
       setState(() {
         _isWakelockEnabled = newStatus;
@@ -231,12 +260,12 @@ class _StayLitHomePageState extends State<StayLitHomePage> {
     // Cancel the refresh timer
     _wakelockRefreshTimer?.cancel();
     // Disable wakelock when app is closed
-    WakelockPlus.disable();
+    SleepPrevention().disable();
     super.dispose();
   }
 
   Future<void> _checkWakelockStatus() async {
-    final isEnabled = await WakelockPlus.enabled;
+    final isEnabled = SleepPrevention().isEnabled;
     setState(() {
       _isWakelockEnabled = isEnabled;
     });
@@ -244,9 +273,9 @@ class _StayLitHomePageState extends State<StayLitHomePage> {
 
   void _toggleWakelock() async {
     if (_isWakelockEnabled) {
-      await WakelockPlus.disable();
+      await SleepPrevention().disable();
     } else {
-      await WakelockPlus.enable();
+      await SleepPrevention().enable();
     }
 
     await _checkWakelockStatus();
@@ -442,6 +471,46 @@ class SettingsPage extends StatelessWidget {
               ),
             ),
 
+            const SizedBox(height: 12),
+
+            // Always On Top setting
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: isDarkMode
+                    ? Colors.grey.shade800
+                    : Colors.grey.withValues(red: 128, green: 128, blue: 128, alpha: 26),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Always On Top',
+                          style: TextStyle(fontSize: 14),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          'Keep this window above other windows (disable if this is not desired)',
+                          style: TextStyle(fontSize: 10, color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Switch(
+                    value: settingsProvider.alwaysOnTop,
+                    onChanged: (value) {
+                      settingsProvider.setAlwaysOnTop(value);
+                    },
+                    activeColor: Theme.of(context).colorScheme.primary,
+                  ),
+                ],
+              ),
+            ),
+
             const SizedBox(height: 16),
 
             // Theme settings section
@@ -526,7 +595,7 @@ class SettingsPage extends StatelessWidget {
                       ),
                       const SizedBox(width: 12),
                       const Text(
-                        'StayLit v1.0.0',
+                        'StayLit v1.0.1',
                         style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                       ),
                     ],
