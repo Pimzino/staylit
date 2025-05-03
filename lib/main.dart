@@ -1,654 +1,179 @@
 import 'package:flutter/material.dart';
-import 'sleep_prevention.dart';
-import 'window_manager_utils.dart';
-import 'dart:async';
-import 'dart:io';
-import 'package:window_manager/window_manager.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-
-// Keys for shared preferences
-const String keyEnableOnStartup = 'enable_on_startup';
-const String keyThemeMode = 'theme_mode';
-const String keyAlwaysOnTop = 'always_on_top';
+import 'package:staylit/sleep_prevention.dart';
+import 'package:staylit/window_manager_utils.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() async {
-  // Ensure widgets binding is initialized
+  // Ensure Flutter bindings are initialized
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Load preferences
-  final prefs = await SharedPreferences.getInstance();
-  final enableOnStartup = prefs.getBool(keyEnableOnStartup) ?? true;
-  final alwaysOnTop = prefs.getBool(keyAlwaysOnTop) ?? true;
+  // Initialize Window Manager and Tray Icon
+  final windowManagerUtils = WindowManagerUtils();
+  await windowManagerUtils.initWindowManager();
 
-  // Enable sleep prevention based on preference
-  if (enableOnStartup) {
-    await SleepPrevention().enable();
-  }
-
-  // Initialize WindowManagerUtils
-  await WindowManagerUtils().initialize();
-
-  // Apply always-on-top setting if needed
-  if (alwaysOnTop) {
-    await WindowManagerUtils().enableAlwaysOnTop();
-  } else {
-    await WindowManagerUtils().disableAlwaysOnTop();
-  }
-
-  // Set up window size for desktop platforms
-  if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
-    await windowManager.ensureInitialized();
-
-    WindowOptions windowOptions = const WindowOptions(
-      size: Size(300, 400),
-      minimumSize: Size(300, 400),
-      maximumSize: Size(300, 400),
-      center: true,
-      backgroundColor: Colors.transparent,
-      skipTaskbar: false,
-      titleBarStyle: TitleBarStyle.normal,
-      title: 'StayLit',
-      alwaysOnTop: false, // This will be controlled by our WindowManagerUtils
-    );
-
-    await windowManager.waitUntilReadyToShow(windowOptions, () async {
-      await windowManager.show();
-      await windowManager.focus();
-      // The icon is set through the Windows runner configuration
-      // in windows/runner/resources/app_icon.ico
-
-      // Disable window maximization and resizing
-      await windowManager.setPreventClose(false);
-      await windowManager.setResizable(false);
-      await windowManager.setMaximizable(false);
-    });
-  }
-
-  runApp(const MyApp());
+  runApp(
+    StayLitApp(windowManagerUtils: windowManagerUtils),
+  ); // Pass instance to app
 }
 
-// Theme provider to manage theme state
-class ThemeProvider extends ChangeNotifier {
-  late SharedPreferences _prefs;
-  ThemeMode _themeMode = ThemeMode.system;
-  bool _initialized = false;
+class StayLitApp extends StatelessWidget {
+  final WindowManagerUtils windowManagerUtils;
 
-  ThemeProvider() {
-    _loadPreferences();
-  }
-
-  Future<void> _loadPreferences() async {
-    _prefs = await SharedPreferences.getInstance();
-    final themeModeIndex = _prefs.getInt(keyThemeMode);
-    if (themeModeIndex != null) {
-      _themeMode = ThemeMode.values[themeModeIndex];
-    }
-    _initialized = true;
-    notifyListeners();
-  }
-
-  ThemeMode get themeMode => _themeMode;
-
-  bool get isDarkMode => _themeMode == ThemeMode.dark;
-
-  bool get isInitialized => _initialized;
-
-  void toggleTheme() {
-    _themeMode = _themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
-    _saveThemePreference();
-    notifyListeners();
-  }
-
-  void _saveThemePreference() {
-    _prefs.setInt(keyThemeMode, _themeMode.index);
-  }
-}
-
-// Settings provider to manage app settings
-class SettingsProvider extends ChangeNotifier {
-  late SharedPreferences _prefs;
-  bool _enableOnStartup = true;
-  bool _alwaysOnTop = true; // Default to true
-  bool _initialized = false;
-
-  SettingsProvider() {
-    _loadPreferences();
-  }
-
-  Future<void> _loadPreferences() async {
-    _prefs = await SharedPreferences.getInstance();
-    _enableOnStartup = _prefs.getBool(keyEnableOnStartup) ?? true;
-    _alwaysOnTop = _prefs.getBool(keyAlwaysOnTop) ?? true; // Default to true
-    _initialized = true;
-    notifyListeners();
-  }
-
-  bool get enableOnStartup => _enableOnStartup;
-  bool get alwaysOnTop => _alwaysOnTop;
-  bool get isInitialized => _initialized;
-
-  Future<void> setEnableOnStartup(bool value) async {
-    _enableOnStartup = value;
-    await _prefs.setBool(keyEnableOnStartup, value);
-    notifyListeners();
-  }
-
-  Future<void> setAlwaysOnTop(bool value) async {
-    _alwaysOnTop = value;
-    await _prefs.setBool(keyAlwaysOnTop, value);
-
-    // Apply the setting immediately
-    if (value) {
-      await WindowManagerUtils().enableAlwaysOnTop();
-    } else {
-      await WindowManagerUtils().disableAlwaysOnTop();
-    }
-
-    notifyListeners();
-  }
-}
-
-class MyApp extends StatefulWidget {
-  const MyApp({super.key});
-
-  @override
-  State<MyApp> createState() => _MyAppState();
-}
-
-class _MyAppState extends State<MyApp> {
-  final ThemeProvider _themeProvider = ThemeProvider();
-  final SettingsProvider _settingsProvider = SettingsProvider();
+  const StayLitApp({super.key, required this.windowManagerUtils});
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: Listenable.merge([_themeProvider, _settingsProvider]),
-      builder: (context, _) {
-        return MaterialApp(
-          title: 'StayLit',
-          themeMode: _themeProvider.themeMode,
-          debugShowCheckedModeBanner: false,
-          theme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: Colors.blue,
-              brightness: Brightness.light,
-            ),
-            useMaterial3: true,
-          ),
-          darkTheme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: Colors.blue,
-              brightness: Brightness.dark,
-            ),
-            useMaterial3: true,
-          ),
-          home: StayLitHomePage(
-            themeProvider: _themeProvider,
-            settingsProvider: _settingsProvider,
-          ),
-        );
-      }
+    return MaterialApp(
+      title: 'StayLit',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+        visualDensity: VisualDensity.adaptivePlatformDensity,
+        brightness: Brightness.light, // Default light theme
+      ),
+      darkTheme: ThemeData(
+        primarySwatch: Colors.blue,
+        visualDensity: VisualDensity.adaptivePlatformDensity,
+        brightness: Brightness.dark, // Default dark theme
+      ),
+      themeMode: ThemeMode.system, // Use system theme setting
+      home: StayLitHomePage(
+        windowManagerUtils: windowManagerUtils,
+      ), // Pass instance to home page
+      debugShowCheckedModeBanner: false,
     );
   }
 }
 
 class StayLitHomePage extends StatefulWidget {
-  final ThemeProvider themeProvider;
-  final SettingsProvider settingsProvider;
+  final WindowManagerUtils windowManagerUtils;
 
-  const StayLitHomePage({
-    super.key,
-    required this.themeProvider,
-    required this.settingsProvider,
-  });
+  const StayLitHomePage({super.key, required this.windowManagerUtils});
 
   @override
   State<StayLitHomePage> createState() => _StayLitHomePageState();
 }
 
 class _StayLitHomePageState extends State<StayLitHomePage> {
-  bool _isWakelockEnabled = true;
-  Timer? _wakelockRefreshTimer;
-  final int _wakelockRefreshInterval = 30; // Check wakelock every 30 seconds
+  bool _isWakelockEnabled = false;
+  final SleepPrevention _sleepPrevention = SleepPrevention();
+  static const _prefsKey = 'isWakelockEnabled';
 
   @override
   void initState() {
     super.initState();
-    _checkWakelockStatus();
-    // Start the periodic wakelock check
-    _startWakelockRefreshTimer();
+    _loadWakelockState();
   }
 
-  void _startWakelockRefreshTimer() {
-    // Cancel any existing timer
-    _wakelockRefreshTimer?.cancel();
-
-    // Create a new timer that periodically checks and refreshes the wakelock
-    _wakelockRefreshTimer = Timer.periodic(
-      Duration(seconds: _wakelockRefreshInterval),
-      (_) => _refreshWakelockIfEnabled()
-    );
+  Future<void> _loadWakelockState() async {
+    final prefs = await SharedPreferences.getInstance();
+    // Avoid calling setState if the widget is disposed during the async gap
+    if (!mounted) return;
+    setState(() {
+      _isWakelockEnabled = prefs.getBool(_prefsKey) ?? false;
+      _sleepPrevention.toggle(enable: _isWakelockEnabled);
+    });
   }
 
-  Future<void> _refreshWakelockIfEnabled() async {
-    // Check current wakelock status
-    final isCurrentlyEnabled = SleepPrevention().isEnabled;
-
-    // If wakelock should be enabled but isn't, re-enable it
-    if (_isWakelockEnabled && !isCurrentlyEnabled) {
-      debugPrint('Sleep prevention was released externally. Re-enabling...');
-      await SleepPrevention().enable();
-    }
-    // If wakelock should be disabled but is enabled, disable it
-    else if (!_isWakelockEnabled && isCurrentlyEnabled) {
-      debugPrint('Sleep prevention was enabled externally. Disabling...');
-      await SleepPrevention().disable();
-    }
-
-    // Update UI if needed
-    final newStatus = SleepPrevention().isEnabled;
-    if (newStatus != _isWakelockEnabled) {
-      setState(() {
-        _isWakelockEnabled = newStatus;
-      });
-    }
+  Future<void> _toggleWakelock() async {
+    final prefs = await SharedPreferences.getInstance();
+    // Avoid calling setState if the widget is disposed during the async gap
+    if (!mounted) return;
+    setState(() {
+      _isWakelockEnabled = !_isWakelockEnabled;
+      prefs.setBool(_prefsKey, _isWakelockEnabled);
+      _sleepPrevention.toggle(enable: _isWakelockEnabled);
+    });
   }
 
   @override
   void dispose() {
-    // Cancel the refresh timer
-    _wakelockRefreshTimer?.cancel();
-    // Disable wakelock when app is closed
-    SleepPrevention().disable();
+    widget.windowManagerUtils.dispose();
+    if (_isWakelockEnabled) {
+      _sleepPrevention.toggle(enable: false);
+    }
     super.dispose();
   }
 
-  Future<void> _checkWakelockStatus() async {
-    final isEnabled = SleepPrevention().isEnabled;
-    setState(() {
-      _isWakelockEnabled = isEnabled;
-    });
-  }
-
-  void _toggleWakelock() async {
-    if (_isWakelockEnabled) {
-      await SleepPrevention().disable();
-    } else {
-      await SleepPrevention().enable();
-    }
-
-    await _checkWakelockStatus();
-  }
-
-  void _openSettings() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => SettingsPage(
-          themeProvider: widget.themeProvider,
-          settingsProvider: widget.settingsProvider,
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    // Check if we're in dark mode
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final brightness = Theme.of(context).brightness;
+    final isDarkMode = brightness == Brightness.dark;
+    final iconColor = isDarkMode ? Colors.white : Colors.black87;
+    final backgroundColor = isDarkMode ? Colors.grey[850] : Colors.grey[50];
+    final cardColor = isDarkMode ? Colors.grey[800] : Colors.white;
+    final textColor = isDarkMode ? Colors.white : Colors.black87;
+    final subTextColor = isDarkMode ? Colors.grey[400] : Colors.grey[600];
 
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: const Text(''),
-        centerTitle: true,
-        toolbarHeight: 40, // Smaller app bar
-        actions: [
-          // Theme toggle button
-          IconButton(
-            icon: Icon(
-              isDarkMode ? Icons.light_mode : Icons.dark_mode,
-              size: 18,
-            ),
-            tooltip: isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode',
-            onPressed: () {
-              widget.themeProvider.toggleTheme();
-            },
-          ),
-          // Settings button
-          IconButton(
-            icon: const Icon(
-              Icons.settings,
-              size: 18,
-            ),
-            tooltip: 'Settings',
-            onPressed: _openSettings,
-          ),
-        ],
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                // App Logo
-                SvgPicture.asset(
-                  'assets/logo.svg',
-                  width: 70,
-                  height: 70,
+      backgroundColor: backgroundColor,
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              SvgPicture.asset(
+                'assets/logo.svg',
+                height: 80,
+                colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'StayLit',
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: textColor,
                 ),
-                const SizedBox(height: 12),
-
-                const Text(
-                  'Keep your device awake',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Keep your screen awake',
+                style: TextStyle(fontSize: 16, color: subTextColor),
+              ),
+              const SizedBox(height: 40),
+              Card(
+                elevation: 4,
+                color: cardColor,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15),
                 ),
-                const SizedBox(height: 16),
-
-                // Display app status
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: isDarkMode
-                        ? Colors.grey.shade800
-                        : Colors.grey.withValues(red: 128, green: 128, blue: 128, alpha: 26),
-                    borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 30,
+                    vertical: 20,
                   ),
-                  child: StatusRow(
-                    label: 'StayLit',
-                    isActive: _isWakelockEnabled,
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                // Control button
-                ElevatedButton.icon(
-                  onPressed: _toggleWakelock,
-                  icon: Icon(_isWakelockEnabled ? Icons.lightbulb : Icons.lightbulb_outline, size: 18),
-                  label: Text(
-                    _isWakelockEnabled ? 'Disable StayLit' : 'Enable StayLit',
-                    style: const TextStyle(fontSize: 14),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                Text(
-                  'This app prevents your computer from sleeping to keep you appearing "online".',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade700,
-                    fontSize: 10,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class SettingsPage extends StatelessWidget {
-  final ThemeProvider themeProvider;
-  final SettingsProvider settingsProvider;
-
-  const SettingsPage({
-    super.key,
-    required this.themeProvider,
-    required this.settingsProvider,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: const Text(''),
-        centerTitle: true,
-        toolbarHeight: 40,
-      ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(16.0),
-          children: [
-            // Section title
-            Text(
-              'General Settings',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ),
-            const SizedBox(height: 8),
-
-            // Enable on startup setting
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: isDarkMode
-                    ? Colors.grey.shade800
-                    : Colors.grey.withValues(red: 128, green: 128, blue: 128, alpha: 26),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Enable on Startup',
-                          style: TextStyle(fontSize: 14),
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          'Automatically enable StayLit when app starts',
-                          style: TextStyle(fontSize: 10, color: Colors.grey),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Switch(
-                    value: settingsProvider.enableOnStartup,
-                    onChanged: (value) {
-                      settingsProvider.setEnableOnStartup(value);
-                    },
-                    activeColor: Theme.of(context).colorScheme.primary,
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            // Always On Top setting
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: isDarkMode
-                    ? Colors.grey.shade800
-                    : Colors.grey.withValues(red: 128, green: 128, blue: 128, alpha: 26),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Always On Top',
-                          style: TextStyle(fontSize: 14),
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          'Keep this window above other windows (disable if this is not desired)',
-                          style: TextStyle(fontSize: 10, color: Colors.grey),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Switch(
-                    value: settingsProvider.alwaysOnTop,
-                    onChanged: (value) {
-                      settingsProvider.setAlwaysOnTop(value);
-                    },
-                    activeColor: Theme.of(context).colorScheme.primary,
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // Theme settings section
-            Text(
-              'Appearance',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ),
-            const SizedBox(height: 8),
-
-            // Theme mode setting
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: isDarkMode
-                    ? Colors.grey.shade800
-                    : Colors.grey.withValues(red: 128, green: 128, blue: 128, alpha: 26),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Dark Mode',
-                          style: TextStyle(fontSize: 14),
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          'Toggle between light and dark theme',
-                          style: TextStyle(fontSize: 10, color: Colors.grey),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Switch(
-                    value: themeProvider.isDarkMode,
-                    onChanged: (value) {
-                      themeProvider.toggleTheme();
-                    },
-                    activeColor: Theme.of(context).colorScheme.primary,
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // About section
-            Text(
-              'About',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ),
-            const SizedBox(height: 8),
-
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: isDarkMode
-                    ? Colors.grey.shade800
-                    : Colors.grey.withValues(red: 128, green: 128, blue: 128, alpha: 26),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      SvgPicture.asset(
-                        'assets/logo.svg',
-                        width: 40,
-                        height: 40,
+                      Text(
+                        _isWakelockEnabled ? 'Active' : 'Inactive',
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: _isWakelockEnabled ? Colors.green : Colors.red,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
-                      const SizedBox(width: 12),
-                      const Text(
-                        'StayLit v1.0.1',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                      const SizedBox(width: 20),
+                      Switch(
+                        value: _isWakelockEnabled,
+                        onChanged: (value) {
+                          _toggleWakelock();
+                        },
+                        activeColor: Colors.green,
+                        inactiveThumbColor: Colors.red,
                       ),
                     ],
                   ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'A simple app that prevents your device from sleeping to maintain "active" status in communication apps.',
-                    style: TextStyle(fontSize: 12),
-                  ),
-                ],
+                ),
               ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class StatusRow extends StatelessWidget {
-  final String label;
-  final bool isActive;
-
-  const StatusRow({
-    super.key,
-    required this.label,
-    required this.isActive,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(
-          isActive ? Icons.check_circle : Icons.cancel,
-          color: isActive ? Colors.green : Colors.red,
-          size: 18,
-        ),
-        const SizedBox(width: 8),
-        Text(
-          label,
-          style: const TextStyle(fontSize: 14),
-        ),
-        const Spacer(),
-        Text(
-          isActive ? 'Active' : 'Inactive',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: isActive ? Colors.green : Colors.red,
-            fontSize: 14,
+              const SizedBox(height: 20),
+              // Removed theme/settings buttons as they weren't defined
+            ],
           ),
         ),
-      ],
+      ),
     );
   }
 }
