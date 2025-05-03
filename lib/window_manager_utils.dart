@@ -85,8 +85,7 @@ class WindowManagerUtils implements WindowListener, TrayListener {
       center: true,
       backgroundColor: Colors.transparent,
       skipTaskbar: false, // Keep in taskbar when visible
-      titleBarStyle: TitleBarStyle.hidden, // Keep hidden for custom title bar
-      windowButtonVisibility: false,
+      titleBarStyle: TitleBarStyle.hidden, // Revert back to hidden
     );
 
     await windowManager.waitUntilReadyToShow(windowOptions, () async {
@@ -121,10 +120,8 @@ class WindowManagerUtils implements WindowListener, TrayListener {
 
   @override
   void onWindowClose() async {
-    // Instead of destroying, hide the window
+    // Keep hiding the window to the tray on close
     await windowManager.hide();
-    // Optionally show a notification or update tray tooltip
-    // print("Window hidden, running in tray.");
   }
 
   @override
@@ -213,10 +210,22 @@ class WindowManagerUtils implements WindowListener, TrayListener {
   @override
   void onTrayIconMouseUp() {}
 
+  /// Cleanly quits the application by destroying the tray and window.
+  Future<void> quitApplication() async {
+    try {
+      await trayManager.destroy();
+    } catch (e) {
+      debugPrint('Error destroying tray icon: $e');
+    }
+    try {
+      await windowManager.destroy();
+    } catch (e) {
+      debugPrint('Error destroying window: $e');
+    }
+  }
+
   void dispose() {
     windowManager.removeListener(this);
     trayManager.removeListener(this);
-    // Consider destroying tray icon here if appropriate on app exit logic
-    // trayManager.destroy();
   }
 }
