@@ -2,7 +2,31 @@ import 'dart:async';
 import 'dart:ffi';
 import 'dart:io';
 
+import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
+
+/// FFI structure for Windows MOUSEINPUT (used by SendInput)
+final class MOUSEINPUT extends Struct {
+  @Int32()
+  external int dx; // X movement (relative pixels when MOUSEEVENTF_MOVE)
+  @Int32()
+  external int dy; // Y movement (relative pixels when MOUSEEVENTF_MOVE)
+  @Uint32()
+  external int mouseData; // Wheel movement (0 for movement)
+  @Uint32()
+  external int dwFlags; // MOUSEEVENTF flags
+  @Uint32()
+  external int time; // Timestamp (0 = system provides)
+  @IntPtr()
+  external int dwExtraInfo; // Extra info (0)
+}
+
+/// FFI structure for Windows INPUT (mouse variant for SendInput)
+final class INPUT extends Struct {
+  @Uint32()
+  external int type; // INPUT_MOUSE = 0
+  external MOUSEINPUT mi; // Mouse input data
+}
 
 /// A class that provides methods to prevent the device from sleeping.
 class SleepPrevention {
@@ -70,7 +94,8 @@ class SleepPrevention {
   Future<void> _refreshSleepPrevention() async {
     if (_isEnabled) {
       await _setPlatformSleepPrevention(true);
-      debugPrint('Sleep prevention refreshed');
+      _simulateActivity(); // Simulate mouse/keyboard activity for Teams
+      debugPrint('Sleep prevention refreshed + activity simulated');
     }
   }
 
@@ -183,6 +208,80 @@ class SleepPrevention {
     } catch (e) {
       debugPrint('Error killing caffeinate process: $e');
       return false;
+    }
+  }
+
+  // Simulate user activity to prevent apps like Teams from showing "Away"
+  void _simulateActivity() {
+    if (Platform.isWindows) {
+      _simulateWindowsMouseMove();
+    } else if (Platform.isMacOS) {
+      _simulateMacOSMouseMove();
+    }
+  }
+
+  // Windows implementation: Inject mouse movement events using SendInput
+  // Note: SendInput injects actual input events into the input stream,
+  // which is detected by Teams (unlike SetCursorPos which only moves cursor position)
+  void _simulateWindowsMouseMove() {
+    if (!Platform.isWindows) return;
+
+    // Constants for SendInput
+    const int inputMouse = 0; // INPUT_MOUSE
+    const int mouseeventfMove = 0x0001; // MOUSEEVENTF_MOVE (relative movement)
+
+    try {
+      final user32 = DynamicLibrary.open('user32.dll');
+
+      // Get SendInput function
+      final sendInput = user32.lookupFunction<
+          Uint32 Function(Uint32 cInputs, Pointer<INPUT> pInputs, Int32 cbSize),
+          int Function(int cInputs, Pointer<INPUT> pInputs, int cbSize)>('SendInput');
+
+      // Allocate INPUT structure
+      final input = calloc<INPUT>();
+
+      try {
+        // Configure for relative mouse movement (1 pixel right)
+        input.ref.type = inputMouse;
+        input.ref.mi.dx = 1; // Move 1 pixel right
+        input.ref.mi.dy = 0;
+        input.ref.mi.mouseData = 0;
+        input.ref.mi.dwFlags = mouseeventfMove; // Relative movement
+        input.ref.mi.time = 0; // System provides timestamp
+        input.ref.mi.dwExtraInfo = 0;
+
+        // Send mouse move right (injects into input stream)
+        final result1 = sendInput(1, input, sizeOf<INPUT>());
+
+        // Move back left (1 pixel)
+        input.ref.mi.dx = -1;
+        final result2 = sendInput(1, input, sizeOf<INPUT>());
+
+        debugPrint('Windows mouse activity simulated via SendInput (results: $result1, $result2)');
+      } finally {
+        // Free allocated memory
+        calloc.free(input);
+      }
+    } catch (e) {
+      debugPrint('Error simulating Windows mouse movement: $e');
+    }
+  }
+
+  // macOS implementation: Simulate activity using osascript
+  Future<void> _simulateMacOSMouseMove() async {
+    if (!Platform.isMacOS) return;
+
+    try {
+      // Use AppleScript to simulate F13 key press (harmless, no visible effect)
+      // F13 is key code 105 - it doesn't do anything in most apps
+      await Process.run('osascript', [
+        '-e',
+        'tell application "System Events" to key code 105',
+      ]);
+      debugPrint('macOS activity simulated (F13 key)');
+    } catch (e) {
+      debugPrint('Error simulating macOS activity: $e');
     }
   }
 }

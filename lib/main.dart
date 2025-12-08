@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:hotkey_manager/hotkey_manager.dart';
 import 'package:staylit/sleep_prevention.dart';
 import 'package:staylit/window_manager_utils.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -8,6 +10,9 @@ import 'package:window_manager/window_manager.dart'; // Import window_manager
 void main() async {
   // Ensure Flutter bindings are initialized
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Clear any previously registered hotkeys (needed for hot reload)
+  await hotKeyManager.unregisterAll();
 
   // Initialize Window Manager and Tray Icon
   final windowManagerUtils = WindowManagerUtils();
@@ -60,10 +65,35 @@ class _StayLitHomePageState extends State<StayLitHomePage> {
   final SleepPrevention _sleepPrevention = SleepPrevention();
   static const _prefsKey = 'isWakelockEnabled';
 
+  // Hardcoded hotkey: Ctrl+Shift+S
+  late HotKey _toggleHotKey;
+
   @override
   void initState() {
     super.initState();
     _loadWakelockState();
+    _registerHotKey();
+  }
+
+  /// Register the hardcoded global hotkey (Ctrl+Shift+S)
+  Future<void> _registerHotKey() async {
+    _toggleHotKey = HotKey(
+      key: PhysicalKeyboardKey.keyS,
+      modifiers: [HotKeyModifier.control, HotKeyModifier.shift],
+      scope: HotKeyScope.system, // Works even when minimized to tray
+    );
+
+    await hotKeyManager.register(
+      _toggleHotKey,
+      keyDownHandler: (hotKey) {
+        _toggleWakelock(); // Toggle using the existing method
+      },
+    );
+  }
+
+  /// Unregister the hotkey on dispose
+  Future<void> _unregisterHotKey() async {
+    await hotKeyManager.unregister(_toggleHotKey);
   }
 
   Future<void> _loadWakelockState() async {
@@ -89,6 +119,7 @@ class _StayLitHomePageState extends State<StayLitHomePage> {
 
   @override
   void dispose() {
+    _unregisterHotKey(); // Unregister hotkey on dispose
     widget.windowManagerUtils.dispose();
     if (_isWakelockEnabled) {
       _sleepPrevention.toggle(enable: false);
@@ -220,6 +251,22 @@ class _StayLitHomePageState extends State<StayLitHomePage> {
                     },
                   ),
                 ],
+              ),
+            ),
+            // Hotkey hint at bottom of window
+            Positioned(
+              bottom: 12,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Text(
+                  'Ctrl+Shift+S to toggle',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: subTextColor,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
               ),
             ),
           ],
