@@ -1,11 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:tray_manager/tray_manager.dart';
 
 /// A class that provides methods to control window behavior.
 class WindowManagerUtils implements WindowListener, TrayListener {
-  static const String _iconPath =
-      'assets/logo.ico'; // Use .ico for Windows tray
   static final WindowManagerUtils _instance = WindowManagerUtils._internal();
   bool _isAlwaysOnTop = false;
   bool _isInitialized = false;
@@ -100,10 +100,16 @@ class WindowManagerUtils implements WindowListener, TrayListener {
   }
 
   Future<void> initTray() async {
-    await trayManager.setIcon(
-      _iconPath,
-      // isTemplate: Platform.isMacOS, // Use template image on macOS if needed
-    );
+    // Get the directory where the executable is located
+    final exeDir = File(Platform.resolvedExecutable).parent.path;
+
+    // Build absolute path to the icon (Flutter assets are in data/flutter_assets/assets/)
+    final iconPath = '$exeDir/data/flutter_assets/assets/logo.ico';
+
+    debugPrint('Tray icon path: $iconPath');
+    debugPrint('Icon exists: ${File(iconPath).existsSync()}');
+
+    await trayManager.setIcon(iconPath);
     await setTrayMenu();
     trayManager.addListener(this);
   }
